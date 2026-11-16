@@ -1,0 +1,10 @@
+# Reconstruction-free world model: latents predict EMA-target embeddings of future frames.
+# The decoder probe is trained on detached latents only (for visualising imagination).
+base: default.yaml
+model:
+  objective: jepa
+  jepa_horizon: 8
+  jepa_loss: cosine
+  decoder_probe: true
+train:
+  run_name: jepa

@@ -1,0 +1,14 @@
+# Hybrid objective: Dreamer pixel reconstruction + JEPA latent prediction.
+env:
+  name: roomnav3d
+  size: 64
+  num_envs: 4
+  max_steps: 500
+  kwargs:
+    num_distractors: 3
+    moving_objects: false
+model:
+  objective: hybrid
+train:
+  run_name: hybrid
+  total_steps: 500000

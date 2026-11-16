@@ -1,0 +1,13 @@
+# Pure world-model pretraining (no policy learning) on a fixed dataset,
+# e.g. produced by scripts/collect.py. Compare objectives via probe/* metrics.
+base: jepa.yaml
+env:
+  kwargs:
+    moving_objects: true
+ac:
+  enabled: false
+train:
+  run_name: jepa_offline
+  prefill: 0
+  train_ratio: 512
+  total_steps: 200000

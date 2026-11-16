@@ -1,0 +1,6 @@
+# DreamerV3-style baseline: representation learned by pixel reconstruction only.
+base: default.yaml
+model:
+  objective: dreamer
+train:
+  run_name: dreamer

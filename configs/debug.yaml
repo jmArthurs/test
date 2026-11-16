@@ -1,0 +1,30 @@
+# Tiny model / short run for smoke tests on CPU (~1 min).
+base: default.yaml
+env:
+  size: 32
+  num_envs: 2
+  max_steps: 60
+model:
+  cnn_depth: 8
+  deter: 64
+  stoch: 8
+  classes: 8
+  hidden: 64
+  jepa_dim: 32
+  jepa_horizon: 3
+ac:
+  horizon: 5
+  hidden: 64
+train:
+  run_name: debug
+  total_steps: 1200
+  prefill: 300
+  train_ratio: 64
+  batch_size: 4
+  seq_len: 16
+  log_every: 200
+  eval_every: 600
+  eval_episodes: 1
+  probe_batches: 4
+  video_every: 600
+  checkpoint_every: 1200
