@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gridworld-planner"
+version = "0.1.0"
+description = "A tiny text gridworld with keys, doors, a switch, and a BFS planner."
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["gridworld_planner"]
