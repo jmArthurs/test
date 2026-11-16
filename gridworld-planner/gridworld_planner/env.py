@@ -1,6 +1,7 @@
 """A small text gridworld: walls, a key, a locked door, a switch-operated gate and a goal."""
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 
 # Layout characters. '@' marks the agent's start and is replaced by floor.
@@ -51,13 +52,22 @@ class GridWorld:
       the agent holds a key (the key is consumed).
     """
 
-    def __init__(self, layout: str = DEFAULT_LAYOUT, max_steps: int = 200, view_radius: int = 2):
+    def __init__(self, layout: str = DEFAULT_LAYOUT, max_steps: int = 200, view_radius: int = 2,
+                 seed: int | None = None, start: tuple[int, int] | None = None):
+        """``start`` overrides the '@' position, e.g. to start the agent on a switch.
+
+        The dynamics are deterministic; ``seed`` seeds ``self.rng`` on every reset so
+        any stochastic extension stays reproducible.
+        """
         self.layout = layout
         self.max_steps = max_steps
         self.view_radius = view_radius
+        self.seed = seed
+        self.start = start
         self.reset()
 
     def reset(self) -> str:
+        self.rng = random.Random(self.seed)
         rows = self.layout.strip("\n").splitlines()
         width = max(len(r) for r in rows)
         self.grid = [list(r.ljust(width, "#")) for r in rows]
@@ -70,8 +80,13 @@ class GridWorld:
                     if self.agent is not None:
                         raise ValueError("layout has more than one agent '@'")
                     self.agent, row[c] = (r, c), "."
+        if self.start is not None:
+            r, c = self.start
+            if not (0 <= r < len(self.grid) and 0 <= c < width) or self.grid[r][c] in BLOCKING:
+                raise ValueError(f"start {self.start} is not walkable")
+            self.agent = tuple(self.start)
         if self.agent is None:
-            raise ValueError("layout needs an agent '@'")
+            raise ValueError("layout needs an agent '@' or a start position")
         self.facing = "up"
         self.holding: list[str] = []
         self.open_doors: set[tuple[int, int]] = set()
