@@ -30,8 +30,10 @@ class Task:
     success: Callable[[GridWorld], bool]
     start: tuple[int, int] | None = None
 
-    def make_env(self) -> GridWorld:
-        return GridWorld(self.layout, max_steps=self.max_steps, seed=self.seed, start=self.start)
+    def make_env(self, seed: int | None = None) -> GridWorld:
+        """Build the task's env. ``seed`` overrides the task seed (e.g. per evaluation episode)."""
+        seed = self.seed if seed is None else seed
+        return GridWorld(self.layout, max_steps=self.max_steps, seed=seed, start=self.start)
 
 
 TASKS = [
@@ -41,10 +43,11 @@ TASKS = [
          "######\n#@k.D#\n######", 3, 10, 102, at_door_with_key),
     Task("unlock_and_pass", "Pick up the key, unlock the door and go through to the goal.",
          "######\n#@kDG#\n######", 5, 15, 103, reached_goal),
-    Task("switch_key_door", "Press the switch you start on, then key, door, gate, goal.",
+    Task("switch_key_door", "Reach the goal. You start on a switch; a key, a locked door and a "
+         "gate lie between you and the goal.",
          "#######\n#skDXG#\n#######", 7, 20, 104, reached_goal, start=(1, 1)),
-    Task("two_room_chain", "Room 1 has the switch and key; the door leads to room 2, "
-         "whose gate guards the goal.",
+    Task("two_room_chain", "Reach the goal. Room 1 holds a switch and a key; a locked door "
+         "leads to room 2, where a gate guards the goal.",
          "#########\n#.s@#####\n#.k.D.XG#\n#########", 10, 30, 105, reached_goal),
 ]
 TASKS_BY_NAME = {t.name: t for t in TASKS}

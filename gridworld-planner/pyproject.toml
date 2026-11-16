@@ -4,9 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gridworld-planner"
-version = "0.1.0"
-description = "A tiny text gridworld with keys, doors, a switch, and a BFS planner."
-requires-python = ">=3.9"
+version = "0.2.0"
+description = "Text gridworld tasks of increasing length for testing random, oracle and LLM planners."
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+api = ["anthropic>=2.8"]
+plot = ["matplotlib>=3.8"]
+all = ["anthropic>=2.8", "matplotlib>=3.8"]
 
 [tool.setuptools]
 packages = ["gridworld_planner"]

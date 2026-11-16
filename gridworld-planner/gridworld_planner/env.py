@@ -32,6 +32,7 @@ class StepResult:
     reward: float
     done: bool
     message: str
+    failed: bool = False  # True if the action had no effect (bumped, locked, nothing to use...)
 
 
 def _offset(dr: int, dc: int) -> str:
@@ -125,14 +126,14 @@ class GridWorld:
             raise ValueError(f"unknown action {action!r}; expected one of {ACTIONS}")
         if self.done:
             msg = "The episode is over. Call reset() to play again."
-            return StepResult(self.observe(msg), 0.0, True, msg)
+            return StepResult(self.observe(msg), 0.0, True, msg, failed=True)
         self.steps += 1
         if action in DIRS:
-            msg = self._move(action)
+            msg, failed = self._move(action)
         elif action == "pick_up":
-            msg = self._pick_up()
+            msg, failed = self._pick_up()
         else:
-            msg = self._use()
+            msg, failed = self._use()
         reward = STEP_COST
         if self.cell(self.agent) == "G":
             self.done = self.reached_goal = True
@@ -141,42 +142,51 @@ class GridWorld:
         elif self.steps >= self.max_steps:
             self.done = True
             msg += " You are out of steps."
-        return StepResult(self.observe(msg), reward, self.done, msg)
+        return StepResult(self.observe(msg), reward, self.done, msg, failed)
 
-    def _move(self, direction: str) -> str:
+    def waste_step(self, message: str) -> StepResult:
+        """Consume a step without acting (e.g. the planner produced no valid action)."""
+        if not self.done:
+            self.steps += 1
+            if self.steps >= self.max_steps:
+                self.done = True
+        return StepResult(self.observe(message), STEP_COST, self.done, message, failed=True)
+
+    # Handlers return (message, failed).
+    def _move(self, direction: str) -> tuple[str, bool]:
         self.facing = direction
         target = self._ahead()
         tile = self.cell(target)
         if tile in BLOCKING:
-            return f"You bump into the {NAMES[tile]}."
+            return f"You bump into the {NAMES[tile]}.", True
         self.agent = target
-        return f"You move {direction}."
+        return f"You move {direction}.", False
 
-    def _pick_up(self) -> str:
+    def _pick_up(self) -> tuple[str, bool]:
         r, c = self.agent
         if self.grid[r][c] == "k":
             self.grid[r][c] = "."
             self.holding.append("key")
-            return "You pick up the key."
-        return "There is nothing here to pick up."
+            return "You pick up the key.", False
+        return "There is nothing here to pick up.", True
 
-    def _use(self) -> str:
+    def _use(self) -> tuple[str, bool]:
         if self.cell(self.agent) == "s":
             if self.switch_on:
-                return "The switch is already on."
+                return "The switch is already on.", True
             self.switch_on = True
-            return "You press the switch. You hear a gate grind open."
+            return "You press the switch. You hear a gate grind open.", False
         target = self._ahead()
         tile = self.cell(target)
         if tile == "D":
             if "key" in self.holding:
                 self.holding.remove("key")
                 self.open_doors.add(target)
-                return "You unlock the door with the key."
-            return "The door is locked. You need a key."
+                return "You unlock the door with the key.", False
+            return "The door is locked. You need a key.", True
         if tile == "X":
-            return "The gate won't budge. Perhaps a switch controls it."
-        return "There is nothing to use here."
+            return "The gate won't budge. Perhaps a switch controls it.", True
+        return "There is nothing to use here.", True
 
     # --- text output -------------------------------------------------------
     def observe(self, message: str = "") -> str:
