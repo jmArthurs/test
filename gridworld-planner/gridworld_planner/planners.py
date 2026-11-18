@@ -1,4 +1,5 @@
-"""Planner interface plus three planners: random, oracle (full map) and LLM (text only).
+"""Planner interface plus four planners: random, oracle (full map), LLM (text only) and
+world model (text only, learns the rules itself; see worldmodel.py).
 
 The runner calls ``reset`` once per episode, then ``act`` once per step with the current
 text observation and, if failure feedback is on and the last action failed, a short
@@ -7,12 +8,14 @@ in ACTIONS is treated by the runner as an invalid reply that wastes a step.
 """
 from __future__ import annotations
 
+import copy
 import random
 import re
 
 from .env import ACTIONS, GridWorld
 from .planner import plan
-from .tasks import Task
+from .tasks import Task, at_door_with_key, facing_door, reached_goal
+from . import worldmodel as wm
 
 
 class Planner:
@@ -124,3 +127,26 @@ class LLMPlanner(Planner):
     @property
     def model(self):
         return "|".join(self.models)
+
+
+class WorldModelPlanner(Planner):
+    """Learned world model + planning in imagination. Sees only the text observations.
+
+    Each episode starts from a copy of a model pretrained on separate training maps and keeps
+    learning during the episode. The goal check is translated from the task's success check
+    into a test on imagined states. It ignores failure feedback: it notices failed actions
+    itself, because the observation it predicted doesn't match the one it gets.
+    """
+    name = "worldmodel"
+    GOALS = {facing_door: wm.goal_facing_door, at_door_with_key: wm.goal_door_with_key,
+             reached_goal: wm.goal_reached_goal}
+
+    def __init__(self, pretrain_steps: int = 150):
+        self.base = wm.pretrain(pretrain_steps)
+
+    def reset(self, task, env, seed):
+        goal = self.GOALS.get(task.success, wm.goal_reached_goal)
+        self.agent = wm.WorldModelAgent(copy.deepcopy(self.base), radius=env.view_radius, goal=goal)
+
+    def act(self, observation, feedback):
+        return self.agent.act(observation)

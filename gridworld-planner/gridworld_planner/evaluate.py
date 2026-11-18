@@ -1,6 +1,6 @@
 """Run N episodes per task for each planner, with and without failure feedback, and log to CSV.
 
-    python -m gridworld_planner.evaluate --episodes 20                      # random + oracle only
+    python -m gridworld_planner.evaluate --episodes 20                      # random, oracle, worldmodel
     python -m gridworld_planner.evaluate --planners llm --episodes 5        # LLM (costs money on api)
     python -m gridworld_planner.evaluate --planners llm --backend local     # LLM via Ollama
 
@@ -17,7 +17,7 @@ from dataclasses import fields
 from pathlib import Path
 
 from .llm import load_config, make_backend
-from .planners import LLMPlanner, OraclePlanner, RandomPlanner
+from .planners import LLMPlanner, OraclePlanner, RandomPlanner, WorldModelPlanner
 from .runner import EpisodeResult, run_episode
 from .tasks import TASKS, TASKS_BY_NAME
 
@@ -32,13 +32,15 @@ def make_planners(names: list[str], config_path: str | None, backend: str | None
             out.append(RandomPlanner())
         elif name == "oracle":
             out.append(OraclePlanner())
+        elif name == "worldmodel":
+            out.append(WorldModelPlanner())
         elif name == "llm":
             cfg = load_config(config_path, backend)
             planner = LLMPlanner(make_backend(cfg))
             planner.name = f"llm:{cfg.backend}:{cfg.model}"
             out.append(planner)
         else:
-            raise SystemExit(f"unknown planner {name!r}; choose from random, oracle, llm")
+            raise SystemExit(f"unknown planner {name!r}; choose from random, oracle, worldmodel, llm")
     return out
 
 
@@ -49,7 +51,8 @@ def _key(row: dict) -> tuple:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--episodes", type=int, default=10, help="episodes per task per condition")
-    ap.add_argument("--planners", default="random,oracle", help="comma list of random,oracle,llm")
+    ap.add_argument("--planners", default="random,oracle,worldmodel",
+                    help="comma list of random,oracle,worldmodel,llm")
     ap.add_argument("--feedback", choices=FEEDBACK, default="both")
     ap.add_argument("--tasks", default=",".join(t.name for t in TASKS), help="comma list of task names")
     ap.add_argument("--backend", choices=("api", "local"), help="override [llm] backend in the config")

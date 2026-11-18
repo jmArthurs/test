@@ -15,7 +15,7 @@ from pathlib import Path
 # Categorical slots in fixed order (validated palette); text and grid stay neutral.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 SURFACE, TEXT, TEXT_2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
-PLANNER_ORDER = ["oracle", "random"]  # LLM planners follow, in order of first appearance
+PLANNER_ORDER = ["oracle", "random", "worldmodel"]  # LLM planners follow, in order of first appearance
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:

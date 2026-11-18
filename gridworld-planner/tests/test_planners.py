@@ -185,14 +185,15 @@ class EvaluateTests(unittest.TestCase):
                 evaluate.main(args)
             with out.open() as f:
                 rows = list(csv.DictReader(f))
-            self.assertEqual(len(rows), 2 * 2 * 5 * 2)  # planners x feedback x tasks x episodes
+            self.assertEqual(len(rows), 3 * 2 * 5 * 2)  # planners x feedback x tasks x episodes
             self.assertEqual(list(rows[0]), evaluate.COLUMNS)
             with contextlib.redirect_stderr(io.StringIO()):
                 evaluate.main(args[:-2] + ["--plot", "", "--resume", "--episodes", "3"])
             with out.open() as f:
-                self.assertEqual(len(list(csv.DictReader(f))), 2 * 2 * 5 * 3)
+                self.assertEqual(len(list(csv.DictReader(f))), 3 * 2 * 5 * 3)
             summary = summarize(out)
             self.assertEqual(summary[("oracle", True)][10], (3, 3))
+            self.assertEqual(summary[("worldmodel", False)][10], (3, 3))
             if has_mpl:
                 self.assertGreater(png.stat().st_size, 10_000)
 

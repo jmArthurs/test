@@ -4,6 +4,17 @@
 
 _Update this at the end of each session: date, what changed, what's next._
 
+**2026-11-18**
+- Added a **learned world model** planner (`worldmodel.py`, planner name `worldmodel`). It
+  sees only the text observations, learns the rules itself, and plans in its learned model.
+  See [The world model planner](#the-world-model-planner).
+- Reran the baseline with it: 100% success at every task length, 0 failed actions. Optimal
+  on the 1/3/5-step tasks; 11 steps on the 7-step task and 22 on the 10-step task, because
+  it can't know a gate exists until it sees one.
+- `--planners` now defaults to `random,oracle,worldmodel`. 47 tests.
+- Next: unchanged (the LLM runs below). The world model is a third reference line between
+  random and oracle that, like the LLM, sees only text.
+
 **2026-11-16**
 - Built the planner interface (random, oracle, LLM), the evaluation script, and the plot.
 - Ran the **baseline only**: random and oracle, 20 episodes per task per condition
@@ -35,6 +46,9 @@ Two questions:
 
 Two reference planners bracket the LLM: **oracle** (reads the full map and plans the
 shortest solution, so it is the ceiling) and **random** (uniform random actions, the floor).
+A third, **worldmodel**, has the same information as the LLM (text observations only) and
+isn't told the rules either. It learns them and plans with them. That shows what a
+text-only agent with an explicit world model can do.
 
 ## Setup
 
@@ -43,11 +57,11 @@ Python 3.11+.
 ```bash
 cd gridworld-planner
 pip install -e ".[all]"     # anthropic (API backend) + matplotlib (plot)
-python -m unittest          # 37 tests, no network or API key needed
+python -m unittest          # 47 tests, no network or API key needed
 ```
 
 Extras: `.[api]` for the API backend only, `.[plot]` for plotting only. The core gridworld,
-the random and oracle planners, and the local backend use only the standard library.
+the random, oracle and world model planners, and the local backend use only the standard library.
 
 ### Choosing the LLM: one setting in `config.toml`
 
@@ -103,7 +117,7 @@ python -m gridworld_planner --task two_room_chain --play
 ## Running the evaluation
 
 ```bash
-# Baseline: free and fast
+# Baseline (random, oracle, worldmodel): free and fast
 python -m gridworld_planner.evaluate --episodes 20
 
 # LLM: start tiny, check the cost, then scale up
@@ -115,7 +129,7 @@ python -m gridworld_planner.evaluate --planners llm --episodes 20 --out results/
 python -m gridworld_planner.evaluate --planners llm --backend local --episodes 20 --out results/local.csv
 
 # Everything in one CSV and one plot
-python -m gridworld_planner.evaluate --planners random,oracle,llm --episodes 20
+python -m gridworld_planner.evaluate --planners random,oracle,worldmodel,llm --episodes 20
 ```
 
 The script runs every combination of planner × feedback (on and off) × task × episode.
@@ -140,7 +154,7 @@ Useful flags: `--feedback on|off|both`, `--tasks a,b`, `--out`, `--plot` (`''` t
 `task, optimal_steps, planner, feedback, episode, seed, success, steps_used, max_steps,
 failed_actions, invalid_replies, model`
 
-- `planner` is `random`, `oracle` or `llm:<backend>:<model>`.
+- `planner` is `random`, `oracle`, `worldmodel` or `llm:<backend>:<model>`.
 - `failed_actions` counts actions that had no effect.
 - `invalid_replies` counts LLM replies with no parseable `ACTION:` line. Each one still
   uses a step.
@@ -166,8 +180,72 @@ To redraw the plot from any CSV: `python -m gridworld_planner.plot results/llm.c
     oracle (the ceiling) and random (the floor).
   - **Question 2:** for the same planner, is the solid line above the dashed one? A gap that
     grows with task length would mean feedback matters more on longer tasks.
-  - For random and oracle the two lines overlap, because they ignore feedback. That makes
-    them a sanity check.
+  - For random, oracle and worldmodel the two lines overlap, because they ignore feedback.
+    That makes them a sanity check. (The world model notices failed actions itself: what it
+    observes doesn't match what it predicted.)
+
+## The world model planner
+
+`gridworld_planner/worldmodel.py`. It gets exactly what the LLM gets, the text observation
+each step, but no rules. Its three parts:
+
+1. **Belief map.** Each observation is parsed into absolute map cells: the agent's square
+   and its 4 neighbours (always named), objects within 2 squares (named), and the rest of
+   that 5×5 window, known only to be "wall or floor" (the observation doesn't list plain
+   tiles). It keeps the map for the whole episode. When the model predicts an effect it
+   can't see, such as a gate opening out of view, the map is updated by dead reckoning.
+2. **Learned transition model.** Every step is logged as
+   `(action, tile here, tile ahead, items held) → effect`. The effect is a symbolic diff:
+   moved or not, which tile changed into what, items gained or lost, and *global* changes
+   such as "every closed gate became an open gate". For each action the model fits a small
+   decision tree, so it learns which features matter and generalises to new situations.
+   Hypotheses are scored by **consistency**: an observation with no gate in view can't
+   refute "the switch opens gates". If a change is noticed late (a gate seen closed, then
+   later seen open), it is **credited back** to the earlier action that seemed to do
+   nothing.
+3. **Planning in imagination.** Dijkstra search over imagined states, with the learned model
+   as the simulator. Unknown cells are assumed walkable but cost a little extra. If the goal
+   hasn't been seen yet, the agent goes for the most new map per step. It replans every
+   step, so a wrong guess is corrected straight away.
+
+It is **pretrained** by curiosity-driven exploration of three training maps (not the task
+maps): untried action/situation pairs and unseen cells count as reward. Every evaluation
+episode starts from a copy of that pretrained model and keeps learning within the episode.
+That keeps episodes independent. The planner is deterministic, so all 20 episodes of a task
+are identical.
+
+To see what it learned, its prediction accuracy on the task maps, and a solve step by step:
+
+```bash
+python -m gridworld_planner.worldmodel                         # learned rules + one-step accuracy
+python -m gridworld_planner.worldmodel --task two_room_chain   # belief map before every step
+```
+
+The learned rules match the real ones, for example:
+
+```
+use:
+  split on here
+    here = floor: split on target
+      target = locked door: split on holding
+        holding = key: -> ahead becomes open door, lose key
+        holding = nothing: -> nothing happens
+    here = switch: -> every closed gate becomes open gate
+```
+
+One-step prediction accuracy on the five task maps (never seen in training), random
+actions: 705/705.
+
+| task | optimal | worldmodel steps | why the extra steps |
+|---|---|---|---|
+| `walk_to_door` | 1 | 1 | |
+| `key_then_door` | 3 | 3 | |
+| `unlock_and_pass` | 5 | 5 | |
+| `switch_key_door` | 7 | 11 | the gate is out of view, so it opens the door first, sees the closed gate, walks back to the switch |
+| `two_room_chain` | 10 | 22 | same, plus a few steps exploring room 1 before it knows where the goal is |
+
+The extra steps are the cost of partial observability, not of model errors: there are no
+failed actions. The oracle sees the whole map from the start.
 
 ## Project layout
 
@@ -177,7 +255,8 @@ gridworld_planner/
   env.py                     gridworld, text observations, failure flag per step
   tasks.py                   the five tasks (layout, seed, success check, step limit)
   planner.py                 BFS shortest-path search (used by the oracle and the tests)
-  planners.py                Planner interface, random / oracle / LLM planners, LLM prompt
+  planners.py                Planner interface, random / oracle / LLM / world model planners, LLM prompt
+  worldmodel.py              belief map, learned transition model, planning in imagination, pretraining
   llm.py                     config loading, API backend (Anthropic SDK), local backend (Ollama)
   runner.py                  runs one episode, applies feedback, returns a result row
   evaluate.py                N episodes × tasks × planners × feedback → CSV (+ plot)
